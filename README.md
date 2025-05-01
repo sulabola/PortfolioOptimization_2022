@@ -17,3 +17,9 @@ $$
 \text{VES}_{P} = \hat{\sigma}_{P}\sqrt{1 - \hat{\rho}_{P, sign}^2},
 $$
 where $\hat{\rho}_{P, sign} = \text{Corr} (R_P - \bar{R}_P,\, \text{sign} (R_P - \bar{R}_P))$, $\bar{R}_P$ is estimate of portfolio expected return, and $\hat{\sigma}_{P}$ is the estimate of portfolio volatility (standard deviation of portfolio returns).
+
+### Findings
+
+A kurtosis-dependent risk measure is developed using combined estimating function theory, allowing direct calculation of portfolio risk without requiring inversion of the covariance matrix. The novel risk measure is applied to portfolios constructed from high-frequency cryptocurrency data. 
+Results demonstrate that the data-driven portfolio optimization method outperforms (larger Sharpe ratios) minimum variance and tangency portfolios.
+
