@@ -5,7 +5,8 @@ Traditional approaches assume that data are normally distributed, leading to an 
 In this work, data-driven kurtosis-based risk measures and their superiority over traditional methods are demonstrated using portfolios with high-frequency stocks and cryptocurrency price data.
 
 The PDF copy of the paper can be downloaded from here: [Download Paper](https://www.mdpi.com/1911-8074/15/10/427)
-Programming Language: R [RStudio](https://posit.co/downloads/)
+
+Programming Language: R [(RStudio)](https://posit.co/downloads/)
 
 ### Methodology
 
