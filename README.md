@@ -6,7 +6,7 @@ In this work, data-driven kurtosis-based risk measures and their superiority ove
 
 The PDF copy of the paper can be downloaded from here: [Download Paper](https://www.mdpi.com/1911-8074/15/10/427)
 
-Programming Language: R [(RStudio)](https://posit.co/downloads/)
+Programming Language: [R](https://cran.r-project.org/bin/windows/base/) / [RStudio](https://posit.co/downloads/)
 
 Data: High-frequency stock and cryptocurrency price data are available in the CSV files.
 
