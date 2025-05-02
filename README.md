@@ -8,6 +8,8 @@ The PDF copy of the paper can be downloaded from here: [Download Paper](https://
 
 Programming Language: R [(RStudio)](https://posit.co/downloads/)
 
+Data: High-frequency stock and cryptocurrency price data are available in the CSV files.
+
 ### Methodology
 
 The assumption of normality in returns often leads to the underestimation of risk, and most financial return distributions exhibit excess kurtosis and skewness.
