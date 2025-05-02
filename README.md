@@ -20,9 +20,16 @@ where $R_p$ is portfolio simple returns and $\mu_p$ is portfolio expected return
 ```math
 \text{VES}_{P} = \hat{\sigma}_{P}\sqrt{1 - \hat{\rho}_{P, sign}^2},
 ```
-where $\hat{\rho}_{P, sign} = \text{Corr} (R_P - \bar{R}_P, \text{sign} (R_P - \bar{R}_P))$ 
-$\bar{R}_{P}$ is the estimate of portfolio expected return, and 
-$\hat{\sigma}_{P}$ is the estimate of portfolio volatility (standard deviation of portfolio returns).
+where 
+```math
+\hat{\rho}_{P, sign} = \text{Corr} (R_P - \bar{R}_P, \text{sign} (R_P - \bar{R}_P))
+```
+```math
+\bar{R}_{P} \,\, \text{is the estimate of portfolio expected return, and}
+```
+```math
+\hat{\sigma}_{P} \,\, \text{is the estimate of portfolio volatility (standard deviation of portfolio returns).}
+``` 
 
 Let us assume that portfolio returns have a cumulative distribution function (CDF) $F(.)$.
 Then, the estimated portfolio risk using mean-absolute deviation (MAD) of returns is given by
