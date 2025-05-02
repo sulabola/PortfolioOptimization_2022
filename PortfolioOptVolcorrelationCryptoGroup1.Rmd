@@ -1,0 +1,588 @@
+---
+title: "Optimizing Portfolio Risk of Cryptocurrencies Using Data-Driven Risk Measures"
+author: "Sulalitha Bowala and Japjeet Singh"
+date: "17/08/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+rm(list=ls(all=TRUE)) # Remove objects from environment
+```
+
+Portfolio optimization is an important topic in Finance. Modern portfolio theory (MPT) states that investors are risk averse and given a level of risk, they will choose the portfolios that offer the most return. To do that we need to optimize the portfolios.
+
+To perform the optimization we will need
+
+- To download the price data of the assets
+
+- Assign random weights to the assets
+
+- Calculate daily portfolio return, sd, kurtosis, ddve, sign correlation and t df
+
+- Use the daily portfolio return, ddve, sign correlation and t df to pick up minimum risk and tangency portfolio and determine the optimal weights
+
+- Use the optimal weights of each portfolio to calculate the annualized portflio return, sd and Sharpe ratio to compare all the portfolios
+
+- Use GA to compare with the random weights algorithm
+
+So lets begin
+
+## Downloading data
+
+First lets load our packages
+
+```{r}
+library(tidyverse)
+library(tidyquant)
+library(plotly)
+library(timetk)
+library(GA)
+library(xtable)
+library(rvest)
+library(fGarch)
+library(dplyr)
+library(dygraphs)
+library(quantmod)
+library(TTR)
+library(zoo)
+library(tseries)
+library(PEIP)
+library(gridExtra)
+library(gdata)
+```
+
+
+```{r}
+# Load all the required functions needed get the results
+## function to generate weight
+get_weights <- function(N){
+  w<- runif(N, min = 0, max = 1)
+  return(w/sum(w))
+}
+```
+
+Next lets select a few stocks to build our portfolios.
+
+We will choose some stocks.
+
+Lets download the price data.
+
+```{r}
+# Read and Store data in RStudio Environment
+
+BTCdata <- read.csv('BTC_data_hourly.csv')
+
+BTC1=BTCdata$Adj.Close
+  
+ETHdata <- read.csv('ETH_data_hourly.csv')
+
+ETH1=ETHdata$Adj.Close
+
+BNBdata <- read.csv('BNB_data_hourly.csv')
+
+BNB1=BNBdata$Adj.Close
+
+price_data1=cbind.data.frame(BTC1, ETH1, BNB1)
+names(price_data1)<-c("BTC","ETH","BNB")
+price_data1 <- na.omit(price_data1)
+
+# Observe data
+
+head(price_data1)
+tail(price_data1)
+
+# Plot the data (Only for BNB. Change name to obtain plot for others)
+
+plot(price_data1$BTC, type = "l", ylab='', main='Price (BTC)', cex.main = 2, cex.lab = 1.5, cex.axis = 1.5, lwd=4.0, col = "red")
+
+```
+
+
+```{r}
+# Organize and calculate returns
+
+ret_tidy1 = apply(price_data1,2, log)
+head(ret_tidy1)
+ret_tidy2 = diff(ret_tidy1)
+head(ret_tidy2)
+ret_tidy = exp (ret_tidy2) - 1 #simple returns
+
+head (ret_tidy)
+tail(ret_tidy)
+
+ret_xts=ret_tidy
+```
+
+
+```{r}
+## remove the first row of zero simple returns for all the columns
+asset_returns <- ret_xts[-1,]
+# Divide the data fro taining and testing
+nrow(asset_returns)
+smp_siz = floor(0.7*nrow(asset_returns))
+train = asset_returns[1:smp_siz,] 
+test = asset_returns[-(1:smp_siz),]
+tail (train)
+head (test)
+tail(test)
+nasset <- ncol(asset_returns)
+```
+
+```{r}
+# skewness correlation
+skewrho <- function(X){
+  skewrho.cor <- cor(X-mean(X), (X-mean(X))^2)
+  return(skewrho.cor)
+}
+
+# sign correlation
+rho.cal<-function(X){
+  rho.hat<-cor(sign(X-mean(X)), X-mean(X))
+  return(rho.hat)
+}
+
+# volatlity correlation
+rho.vol<-function(X){
+  rho.vol<-cor(abs(X-mean(X)), (X-mean(X))^2)
+  return(rho.vol)
+}
+```
+
+
+Simulation study for sign correlation and volatility correlation
+```{r}
+# simulate normal, t(2), t(3), t(4), t(5)
+sample <- 8000
+sim.n <- rnorm (sample)     # sign correlation of a normal distribution is sqrt(2/pi)=0.7979
+sim.t25 <- rt (sample, df = 2.5)
+sim.t3 <- rt (sample, df = 3)
+sim.t35 <- rt (sample, df = 3.5)
+sim.t4 <- rt (sample, df = 4)
+sim.t5 <- rt (sample, df = 5)
+data <- cbind (sim.t25, sim.t3, sim.t35, sim.t4, sim.t5, sim.n)
+
+skewrho<-apply(as.matrix(data), MARGIN=2, FUN=skewrho)
+rhosign<-apply(as.matrix(data), MARGIN=2, FUN=rho.cal)
+rhovol<-apply(as.matrix(data), MARGIN=2, FUN=rho.vol)
+
+assetsummary<-data.frame(apply(data, 2, mean), apply(data, 2, sd), apply(data, 2, skewness), apply(data, 2, kurtosis), skewrho, rhovol, rhosign)
+xtable(assetsummary, digits=4)
+```
+
+```{r}
+##summary statistics of algo returns
+rhosign<-apply(as.matrix(train), MARGIN=2, FUN=rho.cal)
+rhovol<-apply(as.matrix(train), MARGIN=2, FUN=rho.vol)
+assetsummary<-data.frame(apply(train, 2, mean), apply(train, 2, sd), rhovol, rhosign, apply(train, 2, skewness),
+                 apply(train, 2, kurtosis))
+xtable(assetsummary, digits=4)
+```
+
+```{r}
+plot(train, legend.loc=1)
+```
+
+Lets calculate annualized portfolio return, risk, and gamma from the simulated portfolio  returns with portfolio weights.
+(simulated weights)
+
+```{r}
+## portfolio return, sd and gamma
+## w is the random weight
+## data = train or test
+portfolio_info = function(w, data){
+  port.data <- data%*%as.vector(w)
+  port.cdf <- ecdf(port.data)
+  port.return <- mean (port.data)
+  port.sd <- sd (port.data)
+  port.signrho <- cor (port.data - port.return, sign(port.data - port.return))
+# port.signrho3 <- cor (sign(port.data - port.return), (port.data - port.return)^3)
+# port.skewrho <- cor (port.data - port.return, (port.data - port.return)^2)
+  port.volcor <- cor (abs(port.data - port.return), (port.data - port.return)^2) #volatlity correlation
+  port.skewness <- skewness (port.data) #mu_3/sigma^3
+  port.kurtosis <- kurtosis (port.data) #excess kurtosis mu_4/sigma^4 - 3
+  return(c(port.return, port.sd, port.volcor, port.signrho, port.cdf(port.return), port.skewness, port.kurtosis))
+}
+```
+
+```{r}
+stat<-matrix(0, nrow = 3, ncol = 7)
+weight<-matrix(0, nrow = 3, ncol = 3)
+for (i in 1:3){
+weight[i, ] <- get_weights(nasset)
+stat[i, ] <- portfolio_info (weight[i, ], train)
+}
+xtable(weight, digits = 4)
+xtable(stat, digits = 4)
+```
+
+Check for the portfolio sd can be calcualted by both the formula and sd of the simulated portfolio.
+
+We have everything we need to perform our optimization. All we need now is to run this code on 8000 random portfolios. For that we will use a for loop.
+
+Before we do that, we need to create empty vectors and matrix for storing our values.
+
+```{r}
+num_port <- 8000
+nasset <- 3
+
+# Creating a matrix to store the weights
+
+all_wts1 <- matrix(nrow = num_port,
+                  ncol = nasset)
+
+# Creating an empty vector to store
+# 8000 Portfolio returns
+
+port_returns <- vector('numeric', length = num_port)
+
+# Creating an empty vector to store
+# 8000 Portfolio variances
+
+port_risk.var1 <- vector('numeric', length = num_port)
+port_risk.var2 <- vector('numeric', length = num_port)
+port_risk.var3 <- vector('numeric', length = num_port)
+port_risk.var4 <- vector('numeric', length = num_port)
+port_risk.mad <- vector('numeric', length = num_port)
+
+Sharpe_ratio.sd1 <- vector('numeric', length = num_port)
+Sharpe_ratio.sd2 <- vector('numeric', length = num_port)
+Sharpe_ratio.sd3 <- vector('numeric', length = num_port)
+Sharpe_ratio.sd4 <- vector('numeric', length = num_port)
+Sharpe_ratio.mad <- vector('numeric', length = num_port)
+```
+
+Next lets run the for loop 8000 times.
+
+```{r}
+port.info <- matrix(0, nrow = 8000, ncol = 7)
+
+ptm <- proc.time()
+
+for (i in seq_along(port_returns)) {
+  
+  wts <- get_weights(nasset)
+  
+  # Storing weight in the matrix
+  all_wts1[i,] <- wts
+  
+  # Portfolio returns
+  
+  port.info [i, ]<- portfolio_info (wts, train)
+  
+  # Storing Portfolio Returns values
+  port_returns[i] <- port.info[i, 1]
+  
+  # Creating and storing portfolio risk
+  port_risk.var1 [i] <- port.info[i, 2]
+  port_risk.var2 [i] <- sqrt(1 - port.info[i, 3]^2)*port.info[i, 2]
+  port_risk.var3 [i] <- sqrt(1 - port.info[i, 4]^2)*port.info[i, 2]
+  port_risk.var4 [i] <- sqrt(1 - port.info[i, 3]^2)*sqrt(1 - port.info[i, 4]^2)*port.info[i, 2]
+  port_risk.mad [i] <- 2*port.info[i, 2]*port.info[i, 4]*sqrt(port.info[i, 5]*(1-port.info[i, 5]))
+  
+  # Creating and storing Portfolio Sharpe Ratios
+  # Assuming 0% Risk free rate
+  
+  Sharpe_ratio.sd1 [i] <- port_returns[i]/port_risk.var1 [i]
+  Sharpe_ratio.sd2 [i] <- port_returns[i]/port_risk.var2 [i]
+  Sharpe_ratio.sd3 [i] <- port_returns[i]/port_risk.var3 [i]
+  Sharpe_ratio.sd4 [i] <- port_returns[i]/port_risk.var4 [i]
+  Sharpe_ratio.mad [i] <- port_returns[i]/port_risk.mad [i]
+}
+proc.time()-ptm
+```
+
+```{r}
+port.info.data <- as.data.frame(port.info)
+
+ggplot(port.info.data, aes(x=V6, y=V1)) + geom_point(color="blue", alpha=0.5) +geom_smooth(color="darkred") + xlab ("Skewness") + ylab ("Return")
+
+ggplot(port.info.data, aes(x=V7, y=V1)) + geom_point(color="blue", alpha=0.5) +geom_smooth(color="darkred") + xlab ("Kurtosis") + ylab ("Return")
+
+ggplot(port.info.data, aes(x=V3, y=V6)) + geom_point(color="blue", alpha=0.5) +geom_smooth(color="darkred") + xlab ("Volatlity Correlation") + ylab ("Skewness")
+
+ggplot(port.info.data, aes(x=V3, y=V7)) + geom_point(color="blue", alpha=0.5) +geom_smooth(color="darkred") + xlab ("Volatlity Correlation") + ylab ("Kurtosis")
+
+ggplot(port.info.data, aes(x=V3, y=V1)) + geom_point(color="blue", alpha=0.5) +geom_smooth(color="darkred") + xlab ("Volatlity Correlation") + ylab ("Return")
+
+ggplot(port.info.data, aes(x=V3, y=V2)) + geom_point(color="blue", alpha=0.5) +geom_smooth(color="darkred") + xlab ("Volatlity Correlation") + ylab ("Volatility")
+```
+
+```{r}
+ggplot(port.info.data, aes(x=V2, y=V1)) + geom_point(color="blue", alpha=0.5) +geom_smooth(color="darkred") + xlab ("Volatlity") + ylab ("Return")
+
+ggplot(port.info.data, aes(x=V3, y=V2)) + geom_point(color="blue", alpha=0.5) +geom_smooth(color="darkred") + xlab ("Volatlity Correlation") + ylab ("Volatlity")
+
+ggplot(port.info.data, aes(x=V4, y=V2)) + geom_point(color="blue", alpha=0.5) +geom_smooth(color="darkred") + xlab ("Sign Correlation") + ylab ("Volatility")
+
+ggplot(port.info.data, aes(x=V4, y=V6)) + geom_point(color="blue", alpha=0.5) +geom_smooth(color="darkred") + xlab ("Sign Correlation") + ylab ("Skewness")
+
+ggplot(port.info.data, aes(x=V4, y=V7)) + geom_point(color="blue", alpha=0.5) +geom_smooth(color="darkred") + xlab ("Sign Correlation") + ylab ("Kurtosis")
+
+ggplot(port.info.data, aes(x=V4, y=V1)) + geom_point(color="blue", alpha=0.5) +geom_smooth(color="darkred") + xlab ("Sign Correlation") + ylab ("Return")
+
+```
+
+We now create a data table to store all the values together (using sd).
+
+```{r}
+# Storing the values in the table (5 columns and 8000 rows)
+portfolio_values1 <- tibble(Return = port_returns,
+                  Risk1 = port_risk.var1,
+                  Risk2 = port_risk.var2,
+                  Risk3 = port_risk.var3,
+                  Risk4 = port_risk.var4,
+                  Risk5 = port_risk.mad,
+                  SharpeRatio1 = Sharpe_ratio.sd1,
+                  SharpeRatio2 = Sharpe_ratio.sd2,
+                  SharpeRatio3 = Sharpe_ratio.sd3,
+                  SharpeRatio4 = Sharpe_ratio.sd4,
+                  SharpeRatio5 = Sharpe_ratio.mad,
+                  )
+# Converting matrix to a tibble and changing column names
+all_wts1 <- tk_tbl(all_wts1)
+```
+
+```{r}
+colnames(all_wts1) <- colnames(asset_returns)
+
+# Combing all the values together
+portfolio_values1 <- tk_tbl(cbind(all_wts1, portfolio_values1))
+```
+
+We have the weights in each asset with the risk and returns along with the Sharpe ratio of each portfolio. We use daily data to determine the portfolios.
+
+Next lets look at the portfolios that matter the most.
+
+```{r}
+min_var1 <- portfolio_values1[which.min(portfolio_values1$Risk1),]
+min_var2 <- portfolio_values1[which.min(portfolio_values1$Risk2),]
+min_var3 <- portfolio_values1[which.min(portfolio_values1$Risk3),]
+min_var4 <- portfolio_values1[which.min(portfolio_values1$Risk4),]
+min_mad <- portfolio_values1[which.min(portfolio_values1$Risk5),]
+max_sr1 <- portfolio_values1[which.max(portfolio_values1$SharpeRatio1),]
+max_sr2 <- portfolio_values1[which.max(portfolio_values1$SharpeRatio2),]
+max_sr3 <- portfolio_values1[which.max(portfolio_values1$SharpeRatio3),]
+max_sr4 <- portfolio_values1[which.max(portfolio_values1$SharpeRatio4),]
+max_sr5 <- portfolio_values1[which.max(portfolio_values1$SharpeRatio5),]
+rbind(min_var1, min_var2, min_var3, min_var4, min_mad, max_sr1, max_sr2, max_sr3, max_sr4, max_sr5)
+xtable(rbind(min_var1, min_var2, min_var3, min_var4, min_mad, max_sr1, max_sr2, max_sr3, max_sr4, max_sr5), digits = 6)
+```
+
+```{r}
+p1 <- cbind(min_var1[1:3], sqrt(8395)*min_var1[4], sqrt(8395)*min_var1[5], sqrt(8395)*min_var1[10])
+p2 <- cbind(min_var2[1:3], sqrt(8395)*min_var2[4], sqrt(8395)*min_var2[6], sqrt(8395)*min_var2[11])
+p3 <- cbind(min_var3[1:3], sqrt(8395)*min_var3[4], sqrt(8395)*min_var3[7], sqrt(8395)*min_var3[12])
+p4 <- cbind(min_var4[1:3], sqrt(8395)*min_var4[4], sqrt(8395)*min_var4[8], sqrt(8395)*min_var4[13])
+p5 <- cbind(min_mad[1:3], sqrt(8395)*min_mad[4], sqrt(8395)*min_mad[9], sqrt(8395)*min_mad[14])
+xtable(t(rbind(as.numeric(p1), as.numeric(p2), as.numeric(p3), as.numeric(p4), as.numeric(p5))), digits = 5)
+```
+
+```{r}
+p1 <- cbind(max_sr1[1:3], sqrt(8395)*max_sr1[4], sqrt(8395)*max_sr1[5], sqrt(8395)*max_sr1[10])
+p2 <- cbind(max_sr2[1:3], sqrt(8395)*max_sr2[4], sqrt(8395)*max_sr2[6], sqrt(8395)*max_sr2[11])
+p3 <- cbind(max_sr3[1:3], sqrt(8395)*max_sr3[4], sqrt(8395)*max_sr3[7], sqrt(8395)*max_sr3[12])
+p4 <- cbind(max_sr4[1:3], sqrt(8395)*max_sr4[4], sqrt(8395)*max_sr4[8], sqrt(8395)*max_sr4[13])
+p5 <- cbind(max_sr5[1:3], sqrt(8395)*max_sr5[4], sqrt(8395)*max_sr5[9], sqrt(8395)*max_sr5[14])
+xtable(t(rbind(as.numeric(p1), as.numeric(p2), as.numeric(p3), as.numeric(p4), as.numeric(p5))), digits = 5)
+```
+
+```{r}
+nasset <- ncol(asset_returns)
+w1 <- min_var1[, 1:nasset] %>% gather () %>% arrange(desc(value))
+w2 <- min_var2[, 1:nasset] %>% gather () %>% arrange(desc(value))
+w3 <- min_var3[, 1:nasset] %>% gather () %>% arrange(desc(value))
+w4 <- min_var4[, 1:nasset] %>% gather () %>% arrange(desc(value))
+w5 <- min_mad[, 1:nasset] %>% gather () %>% arrange(desc(value))
+w6 <- max_sr1[, 1:nasset] %>% gather () %>% arrange(desc(value))
+w7 <- max_sr2[, 1:nasset] %>% gather () %>% arrange(desc(value))
+w8 <- max_sr3[, 1:nasset] %>% gather () %>% arrange(desc(value))
+w9 <- max_sr4[, 1:nasset] %>% gather () %>% arrange(desc(value))
+w10 <- max_sr5[, 1:nasset] %>% gather () %>% arrange(desc(value))
+
+xtable(cbind(head (w1, 10), head (w2, 10), head (w3, 10), head (w4, 10), head (w5, 10), head (w6, 10), head (w7, 10), head (w8, 10), head (w9, 10), head (w10, 10)), digits = 4)
+```
+
+Lets plot the weights of each portfolio. First with the minimum variance portfolio.
+
+```{r}
+p1 <- min_var4 %>%
+  gather(BTC:BNB, key = Asset,
+         value = Weights) %>%
+  mutate(Asset = as.factor(Asset)) %>%
+  ggplot(aes(x = fct_reorder(Asset,Weights), y = Weights, fill = Asset)) +
+  geom_bar(stat = 'identity') +
+  theme_minimal() +
+  labs(x = 'Assets', y = 'Weights', title = "Minimum Risk Portfolio Weights") +
+  scale_y_continuous(labels = scales::percent) 
+ggplotly(p1)
+```
+
+```{r}
+p2 <- max_sr4 %>%
+  gather(c('BTC', 'ETH', 'BNB'), key = Asset,
+         value = Weights) %>%
+  mutate(Asset = as.factor(Asset)) %>%
+  ggplot(aes(x = fct_reorder(Asset, Weights), y = Weights, fill = Asset)) +
+  geom_bar(stat = 'identity') +
+  theme_minimal() +
+  labs(x = 'Assets', y = 'Weights', title = "Tangency Portfolio Weights") +
+  scale_y_continuous(labels = scales::percent) 
+ggplotly(p2)
+```
+
+```{r}
+#convert daily return, risk, SR to annualized ones
+
+portfolio_values1_annual <- portfolio_values1 %>% mutate(Return = Return * sqrt(8395)) %>% mutate(Risk1 = Risk1 * sqrt(8395), Risk2 = Risk2 * sqrt(8395), Risk3 = Risk3 * sqrt(8395), Risk4 = Risk4 * sqrt(8395), Risk5 = Risk5 * sqrt(8395)) %>% mutate(SharpeRatio1 = SharpeRatio1 * sqrt(8395), SharpeRatio2 = SharpeRatio2 * sqrt(8395), SharpeRatio3 = SharpeRatio3 * sqrt(8395), SharpeRatio4 = SharpeRatio4 * sqrt(8395), SharpeRatio5 = SharpeRatio5 * sqrt(8395))
+```
+
+```{r}
+min_var1.a <- portfolio_values1_annual[which.min(portfolio_values1_annual$Risk1),]
+min_var2.a <- portfolio_values1_annual[which.min(portfolio_values1_annual$Risk2),]
+min_var3.a <- portfolio_values1_annual[which.min(portfolio_values1_annual$Risk3),]
+min_var4.a <- portfolio_values1_annual[which.min(portfolio_values1_annual$Risk4),]
+min_mad.a <- portfolio_values1_annual[which.min(portfolio_values1_annual$Risk5),]
+max_sr1.a <- portfolio_values1_annual[which.max(portfolio_values1_annual$SharpeRatio1),]
+max_sr2.a <- portfolio_values1_annual[which.max(portfolio_values1_annual$SharpeRatio2),]
+max_sr3.a <- portfolio_values1_annual[which.max(portfolio_values1_annual$SharpeRatio3),]
+max_sr4.a <- portfolio_values1_annual[which.max(portfolio_values1_annual$SharpeRatio4),]
+max_sr5.a <- portfolio_values1_annual[which.max(portfolio_values1_annual$SharpeRatio5),]
+
+rbind(min_var1.a, min_var2.a, min_var3.a, min_var4.a, min_mad.a, max_sr1.a, max_sr2.a, max_sr3.a, max_sr4.a, max_sr5.a)
+```
+
+```{r}
+p1 <- portfolio_values1_annual %>%
+  ggplot(aes(x = Risk1, y = Return, color = SharpeRatio1)) +
+  geom_point(alpha = 0.4)+
+  theme_classic() +
+  scale_y_continuous(labels = scales::percent) +
+  scale_x_continuous(labels = scales::percent) +
+  labs(x = 'Annualized Risk (SD)',
+       y = 'Annualized Returns',
+       title = "Portfolio Optimization & Efficient Frontier") +
+  geom_point(aes(x = Risk1,
+                 y = Return), data = min_var1.a, color = 'orange') +
+  geom_point(aes(x = Risk1,
+                 y = Return), data = max_sr1.a, color = 'orange4', shape = 18)
+ggplotly(p1)
+```
+
+
+```{r}
+p2 <- portfolio_values1_annual %>%
+  ggplot(aes(x = Risk2, y = Return, color = SharpeRatio2)) +
+  geom_point(alpha = 0.4)+
+  theme_classic() +
+  scale_y_continuous(labels = scales::percent) +
+  scale_x_continuous(labels = scales::percent) +
+  labs(x = 'Annualized Risk (VEV)',
+       y = 'Annualized Returns',
+       title = "Portfolio Optimization & Efficient Frontier") +
+  geom_point(aes(x = Risk2,
+                 y = Return), data = min_var2.a, color = 'green') +
+  geom_point(aes(x = Risk2,
+                 y = Return), data = max_sr2.a, color = 'green4', shape = 18)
+ggplotly(p2)
+```
+```{r}
+p3 <- portfolio_values1_annual %>%
+  ggplot(aes(x = Risk3, y = Return, color = SharpeRatio3)) +
+  geom_point(alpha = 0.4)+
+  theme_classic() +
+  scale_y_continuous(labels = scales::percent) +
+  scale_x_continuous(labels = scales::percent) +
+  labs(x = 'Annualized Risk (VES)',
+       y = 'Annualized Returns',
+       title = "Portfolio Optimization & Efficient Frontier") +
+  geom_point(aes(x = Risk3,
+                 y = Return), data = min_var3.a, color = 'red') +
+  geom_point(aes(x = Risk3,
+                 y = Return), data = max_sr3.a, color = 'red4', shape = 18)
+ggplotly(p3)
+```
+
+```{r}
+p4 <- portfolio_values1_annual %>%
+  ggplot(aes(x = Risk4, y = Return, color = SharpeRatio4)) +
+  geom_point(alpha = 0.4)+
+  theme_classic() +
+  scale_y_continuous(labels = scales::percent) +
+  scale_x_continuous(labels = scales::percent) +
+  labs(x = 'Annualized Risk (VESV)',
+       y = 'Annualized Returns',
+       title = "Portfolio Optimization & Efficient Frontier") +
+  geom_point(aes(x = Risk4,
+                 y = Return), data = min_var4.a, color = 'purple') +
+  geom_point(aes(x = Risk4,
+                 y = Return), data = max_sr4.a, color = 'purple4', shape = 18)
+ggplotly(p4)
+```
+
+```{r}
+p5 <- portfolio_values1_annual %>%
+  ggplot(aes(x = Risk5, y = Return, color = SharpeRatio5)) +
+  geom_point(alpha = 0.4)+
+  theme_classic() +
+  scale_y_continuous(labels = scales::percent) +
+  scale_x_continuous(labels = scales::percent) +
+  labs(x = 'Annualized Risk (MAD)',
+       y = 'Annualized Returns',
+       title = "Portfolio Optimization & Efficient Frontier") +
+  geom_point(aes(x = Risk5,
+                 y = Return), data = min_mad.a, color = 'blue') +
+  geom_point(aes(x = Risk5,
+                 y = Return), data = max_sr5.a, color = 'blue4', shape = 18)
+ggplotly(p5)
+```
+
+## Plots cummulative returns of the test sample
+
+```{r}
+MVP1 <- test%*%as.vector(as.numeric(min_var1[1:nasset]))
+MVP2 <- test%*%as.vector(as.numeric(min_var2[1:nasset]))
+MVP3 <- test%*%as.vector(as.numeric(min_var3[1:nasset]))
+MVP4 <- test%*%as.vector(as.numeric(min_var4[1:nasset]))
+MVP5 <- test%*%as.vector(as.numeric(min_mad[1:nasset]))
+TP1<-test%*%as.vector(as.numeric(max_sr1[1:nasset]))
+TP2<-test%*%as.vector(as.numeric(max_sr2[1:nasset]))
+TP3<-test%*%as.vector(as.numeric(max_sr3[1:nasset]))
+TP4<-test%*%as.vector(as.numeric(max_sr4[1:nasset]))
+TP5<-test%*%as.vector(as.numeric(max_sr5[1:nasset]))
+EWQ<-test%*%as.vector(rep(1/nasset, nasset))
+assets <- c("MVP1", "MVP2", "MVP3", "MVP4", "MVP5", "TP1", "TP2", "TP3", "TP4", "TP5", "EWQ")
+
+#Portfolios <- merge(test[, 1], cumsum(MVP1), cumsum(MVP2), cumsum(MVP3), cumsum(MVP4), cumsum(MVP5), cumsum(TP1), cumsum(TP2), cumsum(TP3), cumsum(TP4), cumsum(TP5), cumsum(EWQ))[, -c(1)]
+
+Portfolios <- cbind.data.frame(cumsum(MVP1), cumsum(MVP2), cumsum(MVP3), cumsum(MVP4), cumsum(MVP5), cumsum(TP1), cumsum(TP2), cumsum(TP3), cumsum(TP4), cumsum(TP5), cumsum(EWQ))
+
+colnames(Portfolios) <- assets
+```
+
+```{r}
+row.names(Portfolios) <- BTCdata$X[-(1:11276)]
+dygraph(Portfolios, main = 'Cummulative Returns for Test Period')%>%
+dySeries('MVP1', label = 'MVP', col = "orange") %>%
+dySeries('MVP2', label = 'MRP2', col = "green") %>%
+dySeries('MVP3', label = 'MRP3', col = "red") %>%  
+dySeries('MVP4', label = 'MRP4', col = "purple") %>%
+dySeries('MVP5', label = 'MRP5', col = "blue") %>%
+dySeries('TP1', label = 'TP', col = "orange", drawPoints = TRUE) %>% 
+dySeries('TP2', label = 'MRRP2', col = "green", drawPoints = TRUE) %>%
+dySeries('TP3', label = 'MRRP3', col = "red", drawPoints = TRUE) %>%  
+dySeries('TP4', label = 'MRRP4', col = "purple", drawPoints = TRUE) %>% 
+dySeries('TP5', label = 'MRRP5', col = "blue", drawPoints = TRUE) %>%  
+dySeries('EWQ', label = 'EWQ', col = "black") %>% 
+dyRangeSelector(height = 30)%>%
+  dyLegend(width = 500)
+```
+
+
+
+
+
