@@ -5,11 +5,14 @@ date: "17/08/2022"
 output: html_document
 ---
 
-
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+
+```{r}
+rm(list=ls(all=TRUE)) # Remove objects from environment
+```
 
 Portfolio optimization is an important topic in Finance. Modern portfolio theory (MPT) states that investors are risk averse and given a level of risk, they will choose the portfolios that offer the most return. To do that we need to optimize the portfolios.
 
@@ -34,18 +37,28 @@ So lets begin
 First lets load our packages
 
 ```{r}
-list.of.packages <- c('tidyverse','tidyquant', 'plotly','timetk','GA','xtable', 'textreadr','rvest','fGarch',"dplyr", "dygraphs", "quantmod", "TTR", 'zoo', 'tseries', 'fGarch','PEIP','tidyverse','gridExtra', 'gdata', 'xtable',"dygraphs") 
-new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
-if(length(new.packages) > 0) {install.packages(new.packages)}
-lapply(list.of.packages, require, character.only=T)
+library(tidyverse)
+library(tidyquant)
+library(plotly)
+library(timetk)
+library(GA)
+library(xtable)
+library(rvest)
+library(fGarch)
+library(dplyr)
+library(dygraphs)
+library(quantmod)
+library(TTR)
+library(zoo)
+library(tseries)
+library(PEIP)
+library(gridExtra)
+library(gdata)
 ```
 
 ```{r}
 # Load all the required functions needed get the results
 ## function to generate weight
-# get_weights <- function(N){
-#  return(diff(c(0, sort(runif(N-1, min = 0, max = 1)), 1)))
-# }
 get_weights <- function(N){
   w<- runif(N, min = 0, max = 1)
   return(w/sum(w))
@@ -369,20 +382,20 @@ xtable(rbind(min_var1, min_var2, min_var3, min_var4, min_mad, max_sr1, max_sr2, 
 ```
 
 ```{r}
-p1 <- cbind(min_var1[1:5], 1764*min_var1[6], sqrt(1764)*min_var1[7], sqrt(1764)*min_var1[12])
-p2 <- cbind(min_var2[1:5], 1764*min_var2[6], sqrt(1764)*min_var2[8], sqrt(1764)*min_var2[13])
-p3 <- cbind(min_var3[1:5], 1764*min_var3[6], sqrt(1764)*min_var3[9], sqrt(1764)*min_var3[14])
-p4 <- cbind(min_var4[1:5], 1764*min_var4[6], sqrt(1764)*min_var4[10], sqrt(1764)*min_var4[15])
+p1 <- cbind(min_var1[1:5], sqrt(1764)*min_var1[6], sqrt(1764)*min_var1[7], sqrt(1764)*min_var1[12])
+p2 <- cbind(min_var2[1:5], sqrt(1764)*min_var2[6], sqrt(1764)*min_var2[8], sqrt(1764)*min_var2[13])
+p3 <- cbind(min_var3[1:5], sqrt(1764)*min_var3[6], sqrt(1764)*min_var3[9], sqrt(1764)*min_var3[14])
+p4 <- cbind(min_var4[1:5], sqrt(1764)*min_var4[6], sqrt(1764)*min_var4[10], sqrt(1764)*min_var4[15])
 p5 <- cbind(min_mad[1:5], 1764*min_mad[6], sqrt(1764)*min_mad[11], sqrt(1764)*min_mad[16])
 xtable(t(rbind(as.numeric(p1), as.numeric(p2), as.numeric(p3), as.numeric(p4), as.numeric(p5))), digits = 5)
 ```
 
 ```{r}
-p1 <- cbind(max_sr1[1:5], 1764*max_sr1[6], sqrt(1764)*max_sr1[7], sqrt(1764)*max_sr1[12])
-p2 <- cbind(max_sr2[1:5], 1764*max_sr2[6], sqrt(1764)*max_sr2[8], sqrt(1764)*max_sr2[13])
-p3 <- cbind(max_sr3[1:5], 1764*max_sr3[6], sqrt(1764)*max_sr3[9], sqrt(1764)*max_sr3[14])
-p4 <- cbind(max_sr4[1:5], 1764*max_sr4[6], sqrt(1764)*max_sr4[10], sqrt(1764)*max_sr4[15])
-p5 <- cbind(max_sr5[1:5], 1764*max_sr5[6], sqrt(1764)*max_sr5[11], sqrt(1764)*max_sr5[16])
+p1 <- cbind(max_sr1[1:5], sqrt(1764)*max_sr1[6], sqrt(1764)*max_sr1[7], sqrt(1764)*max_sr1[12])
+p2 <- cbind(max_sr2[1:5], sqrt(1764)*max_sr2[6], sqrt(1764)*max_sr2[8], sqrt(1764)*max_sr2[13])
+p3 <- cbind(max_sr3[1:5], sqrt(1764)*max_sr3[6], sqrt(1764)*max_sr3[9], sqrt(1764)*max_sr3[14])
+p4 <- cbind(max_sr4[1:5], sqrt(1764)*max_sr4[6], sqrt(1764)*max_sr4[10], sqrt(1764)*max_sr4[15])
+p5 <- cbind(max_sr5[1:5], sqrt(1764)*max_sr5[6], sqrt(1764)*max_sr5[11], sqrt(1764)*max_sr5[16])
 xtable(t(rbind(as.numeric(p1), as.numeric(p2), as.numeric(p3), as.numeric(p4), as.numeric(p5))), digits = 5)
 ```
 
@@ -433,7 +446,7 @@ ggplotly(p2)
 ```{r}
 #convert daily return, risk, SR to annualized ones
 
-portfolio_values1_annual <- portfolio_values1 %>% mutate(Return = Return * 1764) %>% mutate(Risk1 = Risk1 * sqrt(1764), Risk2 = Risk2 * sqrt(1764), Risk3 = Risk3 * sqrt(1764), Risk4 = Risk4 * sqrt(1764), Risk5 = Risk5 * sqrt(1764)) %>% mutate(SharpeRatio1 = SharpeRatio1 * sqrt(1764), SharpeRatio2 = SharpeRatio2 * sqrt(1764), SharpeRatio3 = SharpeRatio3 * sqrt(1764), SharpeRatio4 = SharpeRatio4 * sqrt(1764), SharpeRatio5 = SharpeRatio5 * sqrt(1764))
+portfolio_values1_annual <- portfolio_values1 %>% mutate(Return = Return * sqrt(1764)) %>% mutate(Risk1 = Risk1 * sqrt(1764), Risk2 = Risk2 * sqrt(1764), Risk3 = Risk3 * sqrt(1764), Risk4 = Risk4 * sqrt(1764), Risk5 = Risk5 * sqrt(1764)) %>% mutate(SharpeRatio1 = SharpeRatio1 * sqrt(1764), SharpeRatio2 = SharpeRatio2 * sqrt(1764), SharpeRatio3 = SharpeRatio3 * sqrt(1764), SharpeRatio4 = SharpeRatio4 * sqrt(1764), SharpeRatio5 = SharpeRatio5 * sqrt(1764))
 ```
 
 ```{r}
