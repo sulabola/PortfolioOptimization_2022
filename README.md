@@ -56,3 +56,9 @@ where $\tilde{\mu}_3$ is skewness and $\kappa$ is kurtosis of portfolio returns.
 A kurtosis-dependent risk measure is developed using combined estimating function theory, allowing direct calculation of portfolio risk without requiring inversion of the covariance matrix. The novel risk measure is applied to portfolios constructed from high-frequency cryptocurrency data. 
 Results demonstrate that the data-driven portfolio optimization method outperforms (larger Sharpe ratios) minimum variance and tangency portfolios.
 
+### References
+
+1. Godambe, V. P. (1960). An optimum property of regular maximum likelihood estimation. The Annals of Mathematical Statistics, 31(4), 1208-1211.
+2. Godambe, V. P. (1985). The foundations of finite sample estimation in stochastic processes. Biometrika, 72(2), 419-428.
+3. Thavaneswaran, A., Liang, Y., Yu, N., Paseka, A., & Thulasiram, R. K. (2021, July). Novel data-driven resilient portfolio risk measures using sign and volatility correlations. In 2021 IEEE 45th Annual Computers, Software, and Applications Conference (COMPSAC) (pp. 1742-1747). IEEE.
+
