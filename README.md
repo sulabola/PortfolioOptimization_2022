@@ -37,7 +37,7 @@ Then, the estimated portfolio risk using mean-absolute deviation (MAD) of return
 \text{MAD}_{P} = 2 \hat{\rho}_{P, sign} \hat{\sigma}_{P} \sqrt{F (\bar{R}_P) (1 - F (\bar{R}_P)}.
 ```
 
-Considering $|R_P - \mu_p|$ and $(R_P - \mu_p)^2$, the estimated portfolio risk using volatility correlation denoted by VEV (volatility estimate using volatility correlation) is given by
+Considering $|R_P - \mu_p|$ and $(R_P - \mu_p)^2$, the estimated portfolio risk using volatility correlation, denoted by VEV (volatility estimate using volatility correlation,) is given by
 is given by
 ```math
 \text{VEV}_{P} =  \hat{\sigma}_{P}\sqrt{1 - \hat{\rho}_{P, vol}^2},
@@ -47,12 +47,12 @@ where
 \hat{\rho}_{P, vol} = \text{Corr} (|R_P - \bar{R}_P|, (R_P - \bar{R}_P)^2).
 ```
 
-The estimated portfolio risk using sign and volatility correlations denoted by VESV (volatility estimate using sign and volatility correlations) is given by
+The estimated portfolio risk using sign and volatility correlations, denoted by VESV (volatility estimate using sign and volatility correlations), is given by
 ```math
 \text{VESV}_{P} =  \hat{\sigma}_{P}\sqrt{(1 - \hat{\rho}_{P, sign}^2)(1 - \hat{\rho}_{P, vol}^2)}.
 ```
 
-Considering $R_P - \mu_p$ and $(R_P - \mu_p)^2-\sigma_{p}^{2}$, the estimated portfolio risk using skewness correlation denoted by VESK (volatility estimate using skewness correlation) is given by 
+Considering $R_P - \mu_p$ and $(R_P - \mu_p)^2-\sigma_{p}^{2}$, the estimated portfolio risk using skewness correlation, denoted by VESK (volatility estimate using skewness correlation), is given by 
 ```math
 \text{VESK}_{P} =  \hat{\sigma}_{P}\sqrt{1 - \hat{\rho}_{P, skew}^2},
 ```
